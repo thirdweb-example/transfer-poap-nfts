@@ -18,7 +18,7 @@ Once you have the Airdrop contract address, put it in here:
 
 ```typescript
 // Airdrop contract address on Gnosis Safe chain
-export const AIRDROP_GNOSIS_SAFE = "0x8F23DF41072187D85DbfF32669bC247fb9a7866B";
+export const AIRDROP_GNOSIS_SAFE = "";
 
 // Airdrop contract address on Ethereum mainnet
 export const AIRDROP_ETH_MAINNET = "";

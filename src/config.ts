@@ -1,7 +1,7 @@
 import { createThirdwebClient } from "thirdweb";
 
 // Airdrop contract address on Gnosis Safe chain
-export const AIRDROP_GNOSIS_SAFE = "0x8F23DF41072187D85DbfF32669bC247fb9a7866B"; // replace this with your own Airdrop contract address
+export const AIRDROP_GNOSIS_SAFE = ""; // replace this with your own Airdrop contract address
 
 // Airdrop contract address on Ethereum mainnet
 export const AIRDROP_ETH_MAINNET = "";
