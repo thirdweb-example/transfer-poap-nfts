@@ -8,7 +8,7 @@ export default function Home() {
 			<div className="bg-purple-700 flex flex-row justify-between mb-6 h-12 px-3">
 				<div className="my-auto text-white text-2xl">Transfer your POAPs</div>
 				<a
-					href="http:"
+					href="https://github.com/thirdweb-example/transfer-poap-nfts"
 					target="_blank"
 					rel="noreferrer"
 					className="my-auto text-white"

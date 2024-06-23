@@ -8,9 +8,23 @@ import {
 } from "@/config";
 import { useOwnedPOAPs, type AcceptedChains } from "@/useOwnedPOAPs";
 import { useState } from "react";
-import { defineChain, getContract, type Hex } from "thirdweb";
+import {
+	defineChain,
+	getContract,
+	sendAndConfirmTransaction,
+	type Hex,
+} from "thirdweb";
 import { airdropERC721 } from "thirdweb/extensions/airdrop";
-import { TransactionButton, useActiveAccount } from "thirdweb/react";
+import {
+	useActiveAccount,
+	useActiveWalletChain,
+	useSwitchActiveWalletChain,
+} from "thirdweb/react";
+import {
+	isApprovedForAll,
+	setApprovalForAll,
+	transferFrom,
+} from "thirdweb/extensions/erc721";
 
 const CHAINS: Array<{
 	value: AcceptedChains;
@@ -37,6 +51,8 @@ const CHAINS: Array<{
 
 export function NFTs() {
 	const [activeTab, setActiveTab] = useState<number>(0);
+	const switchChain = useSwitchActiveWalletChain();
+	const activeChain = useActiveWalletChain();
 	const account = useActiveAccount();
 
 	const selectedItem = CHAINS[activeTab];
@@ -54,6 +70,8 @@ export function NFTs() {
 	const [open, setOpen] = useState(false);
 
 	const [recipient, setRecipient] = useState<string>("");
+
+	const [isTransferring, setTransferring] = useState(false);
 
 	const handleTabClick = (tab: number) => {
 		setActiveTab(tab);
@@ -87,7 +105,9 @@ export function NFTs() {
 									</div>
 								) : (
 									<div className="mx-auto flex flex-row flex-wrap mt-8 max-w-[580px] justify-evenly">
+										{/* biome-ignore lint/suspicious/noExplicitAny: need to update types from SImplehash but im lazy and we will be replacing simplehash with our indexer anyway */}
 										{nfts.map((item: any) => (
+											// biome-ignore lint/a11y/useKeyWithClickEvents: FIXME
 											<div
 												key={item.token_id}
 												className={`flex flex-col cursor-pointer backdrop-blur mt-3 border-2 p-2 rounded-lg gap-2 opacity-75 hover:opacity-100 ${selectedTokenIds.includes(item.token_id) ? "opacity-100 border-green-600" : "opacity-75"}`}
@@ -125,7 +145,7 @@ export function NFTs() {
 				)}
 			</div>
 
-			{selectedTokenIds.length > 0 && (
+			{selectedTokenIds.length > 0 && account && (
 				<div
 					className={`fixed bottom-0 left-0 bg-purple-700 w-full text-white flex p-2 ${open ? "h-64 flex-col" : "h-16 flex-row flex-wrap justify-center gap-3"}`}
 				>
@@ -171,26 +191,103 @@ export function NFTs() {
 							</div>
 							<div className="mx-auto mt-3">
 								{/* FIXME Need to check for token approval first */}
-								<TransactionButton
-									transaction={() => {
-										const contents = selectedTokenIds.map((tokenId) => ({
-											recipient: recipient as Hex,
-											tokenId: BigInt(tokenId),
-										}));
-										const transaction = airdropERC721({
-											contents,
-											contract: getContract({
+								<button
+									className="bg-white text-black px-3 py-2 rounded-lg"
+									type="button"
+									onClick={async () => {
+										setTransferring(true);
+										try {
+											if (!account?.address) return;
+											const chain = defineChain(selectedItem.chainId);
+											if (activeChain?.id !== chain.id) {
+												await switchChain(chain);
+											}
+											const poapContract = getContract({
 												address: selectedItem.poapContractAddress,
 												client: THIRDWEB_CLIENT,
-												chain: defineChain(selectedItem.chainId),
-											}),
-											tokenAddress: selectedItem.poapContractAddress,
-										});
-										return transaction;
+												chain,
+											});
+											/**
+											 * If user only wants to transfer one item,
+											 * then we don't have to use the Airdrop contract
+											 */
+											if (selectedTokenIds.length === 1) {
+												const transaction = transferFrom({
+													contract: poapContract,
+													tokenId: BigInt(selectedTokenIds[0]),
+													from: account.address,
+													to: recipient as Hex,
+												});
+												const receipt = await sendAndConfirmTransaction({
+													transaction,
+													account,
+												});
+												setTransferring(false);
+												setOpen(false);
+												setSelectedTokenIds([]);
+												return alert(
+													`Sent. Tx Hash: ${receipt.transactionHash}`,
+												);
+											}
+
+											if (!selectedItem.airdropContractAddress) {
+												throw new Error(
+													"No airdrop contract found. please read the README",
+												);
+											}
+
+											const airdropContract = getContract({
+												address: selectedItem.airdropContractAddress,
+												chain,
+												client: THIRDWEB_CLIENT,
+											});
+
+											const isApproved = await isApprovedForAll({
+												contract: poapContract,
+												owner: account.address,
+												operator: airdropContract.address as Hex,
+											});
+
+											if (!isApproved) {
+												const approveTx = setApprovalForAll({
+													contract: poapContract,
+													operator: airdropContract.address as Hex,
+													approved: true,
+												});
+
+												await sendAndConfirmTransaction({
+													transaction: approveTx,
+													account,
+												});
+											}
+
+											const contents = selectedTokenIds.map((tokenId) => ({
+												recipient: recipient as Hex,
+												tokenId: BigInt(tokenId),
+											}));
+
+											const transaction = airdropERC721({
+												contents,
+												contract: airdropContract,
+												tokenAddress: selectedItem.poapContractAddress,
+											});
+
+											const receipt = await sendAndConfirmTransaction({
+												transaction,
+												account,
+											});
+											alert(`Sent. Tx hash: ${receipt.transactionHash}`);
+										} catch (err) {
+											console.error(err);
+											alert(err);
+										}
+										setTransferring(false);
+										setOpen(false);
+										setSelectedTokenIds([]);
 									}}
 								>
-									Transfer
-								</TransactionButton>
+									{isTransferring ? "Loading..." : "Transfer"}
+								</button>
 							</div>
 						</>
 					)}
